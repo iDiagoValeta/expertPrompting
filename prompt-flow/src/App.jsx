@@ -145,6 +145,7 @@ export default function App() {
   });
 
   const [examples, setExamples] = useState([{ input: '', output: '' }]); // Ahora es array
+  const [attachments, setAttachments] = useState([{ name: '', description: '' }]); // Nuevo: archivos adjuntos
   const [copied, setCopied] = useState(false);
   const [finalPrompt, setFinalPrompt] = useState('');
   const [activeTemplate, setActiveTemplate] = useState(null);
@@ -154,7 +155,7 @@ export default function App() {
   // Efecto para construir el prompt en tiempo real
   useEffect(() => {
     buildPrompt();
-  }, [data, examples]);
+  }, [data, examples, attachments]);
 
   const handleChange = (field, value) => {
     setData(prev => ({ ...prev, [field]: value }));
@@ -260,6 +261,17 @@ export default function App() {
     // === 3. DATOS DE ENTRADA (RAG simplificado) ===
     if (data.inputData) {
       parts.push(tag('datos_entrada', data.inputData.trim()));
+    }
+
+    // === 3b. ARCHIVOS ADJUNTOS ===
+    if (attachments.some(att => att.name && att.description)) {
+      const validAttachments = attachments.filter(att => att.name && att.description);
+      if (validAttachments.length > 0) {
+        let attachmentsText = validAttachments.map((att, idx) => 
+          `Archivo ${idx + 1}:\nNombre: ${att.name}\nDescripción: ${att.description}`
+        ).join('\n\n');
+        parts.push(tag('archivos_adjuntos', attachmentsText));
+      }
     }
 
     // === 4. FEW-SHOT PROMPTING (1-5 ejemplos) ===
@@ -388,6 +400,7 @@ export default function App() {
       useNegativeInstructions: true
     });
     setExamples([{ input: '', output: '' }]);
+    setAttachments([{ name: '', description: '' }]);
     setCurrentStep(0);
   };
   
@@ -408,6 +421,25 @@ export default function App() {
     const newExamples = [...examples];
     newExamples[index][field] = value;
     setExamples(newExamples);
+  };
+
+  // Helper para añadir/quitar archivos adjuntos
+  const addAttachment = () => {
+    if (attachments.length < 10) {
+      setAttachments([...attachments, { name: '', description: '' }]);
+    }
+  };
+  
+  const removeAttachment = (index) => {
+    if (attachments.length > 1) {
+      setAttachments(attachments.filter((_, i) => i !== index));
+    }
+  };
+  
+  const updateAttachment = (index, field, value) => {
+    const newAttachments = [...attachments];
+    newAttachments[index][field] = value;
+    setAttachments(newAttachments);
   };
 
   // Renderizar el contenido del paso actual
@@ -634,6 +666,64 @@ export default function App() {
                 onChange={(e) => handleChange('inputData', e.target.value)}
               />
             </InputGroup>
+
+            <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-semibold text-sm text-slate-700">D. Archivos Adjuntos (Descripción)</h4>
+                  <p className="text-xs text-slate-500 mt-0.5">Especifica el nombre y descripción de archivos que quieres referenciar (no se suben, solo se describen).</p>
+                </div>
+                <button 
+                  onClick={addAttachment}
+                  disabled={attachments.length >= 10}
+                  className={cn(
+                    "px-3 py-1 rounded text-xs font-medium transition-colors",
+                    attachments.length >= 10 
+                      ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                      : "bg-indigo-600 text-white hover:bg-indigo-700"
+                  )}
+                >
+                  + Añadir Archivo
+                </button>
+              </div>
+              <div className="space-y-3">
+                {attachments.map((att, idx) => (
+                  <div key={idx} className="p-3 bg-white rounded-lg border border-slate-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-slate-600">Archivo {idx + 1}</span>
+                      {attachments.length > 1 && (
+                        <button 
+                          onClick={() => removeAttachment(idx)}
+                          className="text-xs text-red-600 hover:text-red-800"
+                        >
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <input 
+                        className="w-full p-2 border border-slate-200 rounded text-sm bg-slate-50" 
+                        placeholder="Nombre del archivo (ej: contrato_NDA_v2.pdf) *"
+                        value={att.name}
+                        onChange={(e) => updateAttachment(idx, 'name', e.target.value)}
+                      />
+                      <textarea 
+                        className="w-full p-2 border border-slate-200 rounded text-sm bg-slate-50 min-h-[60px]" 
+                        placeholder="Descripción del archivo (contenido, propósito, información relevante) *"
+                        value={att.description}
+                        onChange={(e) => updateAttachment(idx, 'description', e.target.value)}
+                      />
+                    </div>
+                    {att.name && !att.description && (
+                      <p className="text-xs text-red-600 mt-1">⚠ La descripción es obligatoria</p>
+                    )}
+                    {!att.name && att.description && (
+                      <p className="text-xs text-red-600 mt-1">⚠ El nombre del archivo es obligatorio</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         );
 
@@ -990,7 +1080,7 @@ export default function App() {
 
         {/* Info Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-900/50 text-xs text-slate-500 flex justify-between">
-          <span>Optimizado para GPT-4, Claude 3, Llama 3</span>
+          <span>Optimizado para {MODELS.find(m => m.id === data.model)?.name}</span>
           <span>{finalPrompt.length} caracteres</span>
         </div>
       </div>
