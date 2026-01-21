@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   User, Target, Layers, FileText, Copy, Check, RotateCcw, 
   BrainCircuit, MessageSquare, Zap, Layout, ChevronDown, Play,
@@ -22,9 +22,9 @@ const MODELS = [
 ];
 
 const ROLES = [
-  "Experto en Marketing Digital", "Ingeniero de Software Senior", "Redactor Creativo (Copywriter)",
+  "Experto en Marketing Digital", "Ingeniero de Software Senior", "Redactor Creativo",
   "Analista de Datos", "Consultor Legal", "Profesor / Tutor Académico", 
-  "Product Manager", "Reclutador IT", "Diseñador UX/UI", "Traductor Profesional",
+  "Gestor de Producto", "Reclutador IT", "Diseñador UX/UI", "Traductor Profesional",
   "Oficial de Cumplimiento", "Arquitecto de Software", "Científico de Datos"
 ];
 
@@ -65,7 +65,7 @@ const FORMATS = [
 ];
 
 const AUDIENCE_LEVELS = [
-  "Niño de 5 años (ELI5)", "Principiante sin conocimientos previos", 
+  "Niño de 5 años", "Principiante sin conocimientos previos", 
   "Intermedio con bases", "Experto / Técnico", "Ejecutivo (solo resumen)"
 ];
 
@@ -108,15 +108,16 @@ const Toggle = ({ label, checked, onChange, icon: Icon }) => (
 // --- Componente Principal ---
 
 export default function App() {
+  const roleInputRef = useRef(null);
   // Definir los pasos del flujo
   const STEPS = [
     { id: 0, title: 'Modelo LLM', icon: Zap, description: 'Elige el modelo objetivo' },
     { id: 1, title: 'Plantilla', icon: BookOpen, description: 'Selecciona una plantilla (opcional)' },
     { id: 2, title: 'Anclaje de Persona', icon: User, description: 'Rol, experiencia y tono' },
-    { id: 3, title: 'Contexto y Datos', icon: FileText, description: 'Priming y datos de entrada' },
+    { id: 3, title: 'Contexto y Datos', icon: FileText, description: 'Contexto previo y datos de entrada' },
     { id: 4, title: 'Instrucción y Tarea', icon: Target, description: 'Qué debe hacer la IA' },
     { id: 5, title: 'Formato de Salida', icon: Layout, description: 'Estructura de respuesta' },
-    { id: 6, title: 'Refinamiento Avanzado', icon: BrainCircuit, description: 'CoT, Few-Shot, Guardrails' },
+    { id: 6, title: 'Refinamiento Avanzado', icon: BrainCircuit, description: 'Razonamiento, Ejemplos, Límites' },
     { id: 7, title: 'Seguridad', icon: Shield, description: 'Validación final' }
   ];
 
@@ -129,13 +130,13 @@ export default function App() {
     audienceLevel: '', // Renombrado de 'level'
     context: '',
     inputData: '',
-    constraints: '',
+    constraints: [''],
     format: '',
-    outputSchema: '', // Nuevo: para JSON/XML schemas
+    outputSchema: '', // Nuevo: para esquemas JSON/XML
     length: '',
     tone: '',
-    // Advanced Toggles
-    useCoT: false, // Chain of Thought
+    // Opciones avanzadas
+    useCoT: false, // Cadena de Pensamiento
     useFewShot: false, // Ejemplos
     useDecomposition: false, // Paso a paso
     useMultiAgent: false, // Debate
@@ -147,19 +148,272 @@ export default function App() {
   const [examples, setExamples] = useState([{ input: '', output: '' }]); // Ahora es array
   const [attachments, setAttachments] = useState([{ name: '', description: '' }]); // Nuevo: archivos adjuntos
   const [copied, setCopied] = useState(false);
-  const [finalPrompt, setFinalPrompt] = useState('');
   const [activeTemplate, setActiveTemplate] = useState(null);
   const [selectedSector, setSelectedSector] = useState(null); // Nuevo: sector seleccionado
   const [currentStep, setCurrentStep] = useState(0);
 
-  // Efecto para construir el prompt en tiempo real
-  useEffect(() => {
-    buildPrompt();
+  // ========================================
+  // CONSTRUCTOR DE PROMPT - Función pura con useMemo
+  // ========================================
+  
+  // Función auxiliar para generar etiquetas según el modelo (XML para Claude, Markdown para otros)
+  const createTagHelper = (modelId, useXMLTags) => {
+    const useXML = useXMLTags && (modelId === 'claude');
+    const useMarkdown = !useXML;
+    
+    return (name, content, inline = false) => {
+      if (!useXMLTags) return content;
+      if (useXML) {
+        return inline ? `<${name}>${content}</${name}>` : `<${name}>\n${content}\n</${name}>`;
+      }
+      // Markdown headings para GPT/Gemini/Llama - convertir guiones bajos a espacios
+      const displayName = name.replace(/_/g, ' ').toUpperCase();
+      return `## ${displayName}\n${content}`;
+    };
+  };
+
+  // Constructor de Prompt - Función pura que retorna el prompt construido
+  const buildPrompt = useMemo(() => {
+    const modelInfo = MODELS.find(m => m.id === data.model);
+    const useXML = data.useXMLTags && data.model === 'claude';
+    const tag = createTagHelper(data.model, data.useXMLTags);
+    const parts = [];
+
+    // === 1. ANCLAJE DE PERSONA Y ROL (con calibración de experiencia) ===
+    if (data.role) {
+      let personaText = '';
+      
+      if (useXML) {
+        // Estructura optimizada para Claude con XML semántico
+        personaText = `Eres un ${data.role}`;
+        if (data.experienceLevel) {
+          const expLabel = EXPERIENCE_LEVELS.find(e => e.id === data.experienceLevel)?.label;
+          personaText += ` de nivel ${expLabel}`;
+        }
+        personaText += '.';
+      } else {
+        // Estructura Markdown para GPT/Gemini/Llama
+        personaText = `**Rol:** ${data.role}`;
+        if (data.experienceLevel) {
+          const expLabel = EXPERIENCE_LEVELS.find(e => e.id === data.experienceLevel)?.label;
+          personaText += `\n**Nivel de Experiencia:** ${expLabel}`;
+        }
+      }
+      
+      // Añadir calibración de tono
+      if (data.tone) {
+        const toneObj = TONES.find(t => t.id === data.tone);
+        if (toneObj) {
+          personaText += useXML 
+            ? `\nEstilo de comunicación: ${toneObj.label} (${toneObj.desc}).`
+            : `\n**Tono:** ${toneObj.label} - ${toneObj.desc}`;
+        }
+      }
+      
+      // Multi-agente (Debate interno)
+      if (data.useMultiAgent) {
+        // Extraer nombre corto del rol (primeras palabras antes de "con" o "especializado")
+        const shortRole = data.role.split(/\s+(con|especializado|experto en|de nivel|\(|,)/i)[0].trim();
+        const multiAgentText = useXML
+          ? `\n\nModo Debate:\nSimula un debate interno entre dos perspectivas:\n- Agente Principal (${shortRole}): Propone la solución.\n- Agente Crítico (Escéptico): Cuestiona y busca huecos lógicos.\nSintetiza la mejor respuesta tras el debate.`
+          : `\n\n### MODO MULTI-AGENTE\nSimula un debate interno:\n- **Agente A (${shortRole}):** Propone la solución.\n- **Agente B (Crítico):** Cuestiona y busca huecos.\nLuego sintetiza la mejor respuesta.`;
+        personaText += multiAgentText;
+      }
+      
+      parts.push(tag('persona', personaText));
+    }
+
+    // === 2. CONTEXTO Y PREPARACIÓN (con nivel de audiencia) ===
+    if (data.context || data.audienceLevel) {
+      let contextText = '';
+      if (data.context) contextText += data.context;
+      if (data.audienceLevel) {
+        if (contextText) contextText += '\n\n';
+        contextText += useXML
+          ? `Audiencia objetivo: ${data.audienceLevel}\nAdapta el nivel de detalle y vocabulario para esta audiencia.`
+          : `**AUDIENCIA:** ${data.audienceLevel}\nAdapta el nivel de detalle y vocabulario para esta audiencia.`;
+      }
+      parts.push(tag('contexto', contextText));
+    }
+
+    // === 3. DATOS DE ENTRADA (Base de Conocimiento) ===
+    if (data.inputData) {
+      const dataSection = `Basa tu respuesta ÚNICAMENTE en la siguiente información:\n\n${data.inputData.trim()}`;
+      parts.push(tag('datos_entrada', dataSection));
+    }
+
+    // === 3b. ARCHIVOS ADJUNTOS ===
+    const validAttachments = attachments.filter(att => att.name && att.description);
+    if (validAttachments.length > 0) {
+      let attachmentsText = validAttachments.map((att, idx) => 
+        useXML
+          ? `Archivo ${idx + 1}:\n  Nombre: ${att.name}\n  Descripción: ${att.description}`
+          : `**Archivo ${idx + 1}:** ${att.name}\n${att.description}`
+      ).join('\n\n');
+      parts.push(tag('archivos_adjuntos', attachmentsText));
+    }
+
+  // Función auxiliar para convertir contenido con etiquetas XML a formato Markdown
+  const convertXmlToMarkdown = (text) => {
+    if (!text) return text;
+    
+    let converted = text
+      // Convertir etiquetas con atributos (ej: <file path="src/..."> -> ### FILE: src/...)
+      .replace(/<([a-z_]+)\s+([^>]+)>[\s\n]*/gi, (match, tagName, attrs) => {
+        const title = tagName.replace(/_/g, ' ').toUpperCase();
+        // Extraer valor del primer atributo para contexto
+        const attrMatch = attrs.match(/(?:path|id|name|label|language|severity|risk|priority|type)="([^"]+)"/i);
+        const attrValue = attrMatch ? `: ${attrMatch[1]}` : '';
+        return `\n### ${title}${attrValue}\n`;
+      })
+      // Convertir etiquetas simples sin atributos a encabezados
+      .replace(/<([a-z_]+)>[\s\n]*/gi, (match, tagName) => {
+        const title = tagName.replace(/_/g, ' ').toUpperCase();
+        return `\n### ${title}\n`;
+      })
+      // Eliminar etiquetas de cierre
+      .replace(/<\/[a-z_]+>[\s\n]*/gi, '\n')
+      // Limpiar múltiples saltos de línea
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+    
+    return converted;
+  };
+
+    // === 4. EJEMPLOS (Few-Shot - ejemplos estructurados) ===
+    if (data.useFewShot) {
+      const validExamples = examples.filter(ex => ex.input && ex.output);
+      if (validExamples.length > 0) {
+        let examplesText = useXML
+          ? validExamples.map((ex, idx) => 
+              `Ejemplo ${idx + 1}:\n  Entrada: ${ex.input}\n  Salida esperada: ${ex.output}`
+            ).join('\n\n')
+          : validExamples.map((ex, idx) => {
+              // Convertir salida XML a Markdown si no es Claude
+              const outputText = convertXmlToMarkdown(ex.output);
+              return `**Ejemplo ${idx + 1}:**\n- Entrada: ${ex.input}\n- Salida Esperada: ${outputText}`;
+            }).join('\n\n');
+        
+        const intro = 'Aprende del patrón de estos ejemplos y aplícalo a la tarea:';
+        parts.push(tag('ejemplos', `${intro}\n\n${examplesText}`));
+      }
+    }
+
+    // === 5. INSTRUCCIÓN PRINCIPAL (TAREA) con Cadena de Pensamiento mejorada ===
+    if (data.task) {
+      let taskText = data.task;
+      
+      // Descomposición automática con pasos explícitos
+      if (data.useDecomposition) {
+        const decompositionText = useXML
+          ? `\n\nEstrategia de resolución:\nAborda esta tarea siguiendo estos pasos:\n1. Analiza los requisitos y restricciones\n2. Descompón el problema en sub-tareas manejables\n3. Resuelve cada sub-tarea secuencialmente\n4. Integra las soluciones parciales\n5. Valida el resultado final`
+          : `\n\n### ESTRATEGIA DE RESOLUCIÓN\n1. Analiza los requisitos y restricciones\n2. Descompón el problema en sub-tareas\n3. Resuelve cada sub-tarea secuencialmente\n4. Integra las soluciones parciales\n5. Valida el resultado final`;
+        taskText += decompositionText;
+      }
+      
+      parts.push(tag('tarea', taskText));
+    }
+
+    // === 6. RESTRICCIONES Y LÍMITES DE SEGURIDAD (Anti-alucinación mejorado) ===
+    const constraintsList = [];
+    
+    // Restricciones del usuario
+    if (Array.isArray(data.constraints)) {
+      constraintsList.push(...data.constraints.filter(c => c.trim()));
+    }
+    
+    // Límites de seguridad automáticos (Anclaje fuerte)
+    if (data.useNegativeInstructions) {
+      constraintsList.push(
+        'IMPORTANTE: Si no tienes suficiente información para responder con certeza, responde textualmente: "No tengo información suficiente para responder esto con precisión."',
+        'NO inventes hechos, fechas, estadísticas, nombres de librerías o APIs. Basa tu respuesta únicamente en los datos proporcionados.',
+        'Si hay ambigüedad en la pregunta, solicita clarificación antes de asumir.',
+        'Distingue claramente entre hechos verificables y opiniones/suposiciones.'
+      );
+    }
+    
+    if (constraintsList.length > 0) {
+      const constraintsText = constraintsList.map(c => useXML ? `• ${c}` : `- ${c}`).join('\n');
+      parts.push(tag('restricciones', constraintsText));
+    }
+
+    // === 7. CADENA DE PENSAMIENTO (CoT) - Diferenciado por modelo ===
+    if (data.useCoT) {
+      let cotContent = '';
+      
+      if (data.model === 'claude' && useXML) {
+        // Claude con patrón de pensamiento extendido - sin etiquetas XML internas
+        cotContent = `Antes de dar tu respuesta final, sigue este proceso:\n\n1. PENSAMIENTO:\n   - Analiza el problema paso a paso\n   - Identifica posibles enfoques\n   - Evalúa pros y contras de cada opción\n   - Selecciona el mejor enfoque justificando tu elección\n\n2. RESPUESTA:\n   [Tu respuesta final aquí]`;
+      } else if (data.model === 'gpt') {
+        // GPT con Cadena de Pensamiento optimizada
+        cotContent = `Piensa paso a paso siguiendo este esquema:\n\n1. **Entendimiento:** ¿Qué se me está pidiendo exactamente?\n2. **Análisis:** ¿Cuáles son los elementos clave del problema?\n3. **Opciones:** ¿Qué alternativas existen?\n4. **Evaluación:** ¿Cuál es la mejor opción y por qué?\n5. **Respuesta:** Presenta tu solución final.\n\nMuestra tu razonamiento antes de la respuesta final.`;
+      } else {
+        // Gemini/Llama con enfoque estructurado
+        cotContent = `Resuelve este problema paso a paso:\n- Primero, analiza los datos disponibles\n- Luego, identifica el enfoque óptimo\n- Finalmente, presenta tu respuesta con justificación\n\nPensemos paso a paso para asegurar precisión.`;
+      }
+      
+      parts.push(tag('razonamiento', cotContent));
+    }
+
+    // === 8. FORMATO DE SALIDA (Estructuración de Respuesta) ===
+    const formatInstructions = [];
+    
+    if (data.format) {
+      const formatObj = FORMATS.find(f => f.id === data.format);
+      if (formatObj) {
+        formatInstructions.push(useXML 
+          ? `Formato requerido: ${formatObj.label}`
+          : `**Formato requerido:** ${formatObj.label}`);
+        
+        // Esquema si es necesario
+        if (formatObj.needsSchema && data.outputSchema) {
+          formatInstructions.push(useXML
+            ? `Esquema a seguir:\n${data.outputSchema}\nRellena este esquema exactamente, sin añadir campos adicionales.`
+            : `### ESQUEMA A SEGUIR\n\`\`\`\n${data.outputSchema}\n\`\`\`\nRellena este esquema exactamente.`);
+        }
+        
+        // Indicación de pre-llenado para Claude con JSON
+        if (data.model === 'claude' && data.format === 'json' && data.usePreFill) {
+          formatInstructions.push('NOTA IMPORTANTE: Tu respuesta debe comenzar directamente con el carácter { sin texto previo.');
+        }
+      }
+    }
+    
+    if (data.length) {
+      formatInstructions.push(useXML
+        ? `Longitud objetivo: ${data.length}`
+        : `**Longitud:** ${data.length}`);
+    }
+    
+    if (formatInstructions.length > 0) {
+      parts.push(tag('formato_salida', formatInstructions.join('\n')));
+    }
+
+    // === ENSAMBLAJE FINAL ===
+    let finalText = parts.join('\n\n');
+    
+    // Header informativo (no forma parte del prompt ejecutable)
+    const structureType = useXML ? 'XML (optimizado para Claude)' : 'Markdown';
+    const header = `# Prompt generado para: ${modelInfo?.name || 'LLM genérico'}\n# Estructura: ${structureType}\n# Técnicas activas: ${[data.useCoT && 'Cadena de Pensamiento', data.useFewShot && 'Ejemplos (Few-Shot)', data.useDecomposition && 'Descomposición', data.useMultiAgent && 'Multi-Agente', data.useNegativeInstructions && 'Anti-Alucinación'].filter(Boolean).join(', ') || 'Ninguna'}\n\n`;
+    
+    return header + finalText;
   }, [data, examples, attachments]);
 
   const handleChange = (field, value) => {
     setData(prev => ({ ...prev, [field]: value }));
   };
+
+  useEffect(() => {
+    if (roleInputRef.current && data.role) {
+      const el = roleInputRef.current;
+      const end = data.role.length;
+      try {
+        el.setSelectionRange(end, end);
+      } catch {
+        // ignore for non-text inputs
+      }
+    }
+  }, [data.role]);
 
   const loadTemplate = (useCase) => {
     setActiveTemplate(useCase.id);
@@ -170,6 +424,14 @@ export default function App() {
     // Mapear format string a ID
     const formatId = FORMATS.find(f => f.label === useCase.format)?.id || '';
     
+    // Cargar ejemplos si la plantilla los tiene
+    const hasExamples = useCase.examples && useCase.examples.length > 0;
+    if (hasExamples) {
+      setExamples(useCase.examples.map(ex => ({ input: ex.input, output: ex.output })));
+    } else {
+      setExamples([{ input: '', output: '' }]);
+    }
+    
     setData(prev => ({
       ...prev,
       role: useCase.role || '',
@@ -178,21 +440,21 @@ export default function App() {
       audienceLevel: '', 
       context: useCase.context || '',
       inputData: '', 
-      constraints: useCase.constraints || '',
+      constraints: useCase.constraints ? useCase.constraints.split('\n') : [''],
       format: formatId,
       outputSchema: '',
       length: '', 
       tone: toneId,
       useCoT: useCase.id.includes('debug') || useCase.id.includes('biz') || useCase.id.includes('ehr') || useCase.id.includes('legal'),
-      useFewShot: false,
-      useDecomposition: useCase.id.includes('plan') || useCase.id.includes('strategy') || useCase.id.includes('portfolio'),
+      useFewShot: hasExamples, // Activar automáticamente si hay ejemplos
+      useDecomposition: useCase.id.includes('plan') || useCase.id.includes('strategy') || useCase.id.includes('portfolio') || useCase.id.includes('legacy'),
       useMultiAgent: false,
       useNegativeInstructions: true
     }));
   };
 
   const nextStep = () => {
-    if (currentStep < STEPS.length - 1) {
+    if (currentStep < STEPS.length - 1 && isStepValid(currentStep)) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -204,173 +466,87 @@ export default function App() {
   };
 
   const goToStep = (stepIndex) => {
-    if (stepIndex >= 0 && stepIndex < STEPS.length) {
+    // Solo permitir ir a pasos anteriores o al actual sin validación
+    // Para avanzar, debe pasar la validación del paso actual
+    if (stepIndex < currentStep) {
       setCurrentStep(stepIndex);
+    } else if (stepIndex === currentStep) {
+      // Ya estamos en este paso
+    } else if (stepIndex > currentStep) {
+      // Validar todos los pasos intermedios antes de saltar
+      let canAdvance = true;
+      for (let i = currentStep; i < stepIndex; i++) {
+        if (!isStepValid(i)) {
+          canAdvance = false;
+          break;
+        }
+      }
+      if (canAdvance) {
+        setCurrentStep(stepIndex);
+      }
     }
   };
 
-  const buildPrompt = () => {
-    const useXML = data.useXMLTags && (data.model === 'claude' || data.model === 'gemini');
-    const parts = [];
-    
-    // Helper para tags
-    const tag = (name, content, inline = false) => {
-      if (!data.useXMLTags) return content;
-      if (useXML) {
-        return inline ? `<${name}>${content}</${name}>` : `<${name}>\n${content}\n</${name}>`;
-      }
-      return `## ${name.toUpperCase()}\n${content}`;
-    };
-
-    // === 1. ANCLAJE DE PERSONA Y ROL ===
-    if (data.role) {
-      let personaText = `Actúas como un ${data.role}`;
-      if (data.experienceLevel) {
-        const expLabel = EXPERIENCE_LEVELS.find(e => e.id === data.experienceLevel)?.label;
-        personaText += ` de nivel ${expLabel}`;
-      }
-      personaText += '.';
+  // ========================================
+  // VALIDACIÓN DE PASOS
+  // ========================================
+  
+  // Función que determina si un paso tiene campos requeridos completos
+  const isStepValid = (stepIndex) => {
+    switch (stepIndex) {
+      case 0: // Modelo LLM - Siempre válido (tiene default)
+        return !!data.model;
       
-      // Añadir calibración de tono
-      if (data.tone) {
-        const toneObj = TONES.find(t => t.id === data.tone);
-        if (toneObj) {
-          personaText += ` Tu estilo de comunicación debe ser: ${toneObj.label} (${toneObj.desc}).`;
-        }
-      }
+      case 1: // Plantilla - Opcional, siempre válido
+        return true;
       
-      // Multi-agente
-      if (data.useMultiAgent) {
-        personaText += `\n\nMODO MULTI-AGENTE: Simula un debate interno entre dos perspectivas:\n- Agente A (${data.role}): Propone la solución.\n- Agente B (Crítico Escéptico): Cuestiona y busca huecos.\nLuego sintetiza la mejor respuesta.`;
-      }
+      case 2: // Anclaje de Persona - ROL es obligatorio
+        return data.role.trim().length >= 3;
       
-      parts.push(tag('persona', personaText));
-    }
-
-    // === 2. CONTEXTO Y PRIMING ===
-    if (data.context || data.audienceLevel) {
-      let contextText = '';
-      if (data.context) contextText += data.context;
-      if (data.audienceLevel) {
-        if (contextText) contextText += '\n\n';
-        contextText += `AUDIENCIA: La respuesta debe ser comprensible para alguien con nivel "${data.audienceLevel}".`;
-      }
-      parts.push(tag('contexto', contextText));
-    }
-
-    // === 3. DATOS DE ENTRADA (RAG simplificado) ===
-    if (data.inputData) {
-      parts.push(tag('datos_entrada', data.inputData.trim()));
-    }
-
-    // === 3b. ARCHIVOS ADJUNTOS ===
-    if (attachments.some(att => att.name && att.description)) {
-      const validAttachments = attachments.filter(att => att.name && att.description);
-      if (validAttachments.length > 0) {
-        let attachmentsText = validAttachments.map((att, idx) => 
-          `Archivo ${idx + 1}:\nNombre: ${att.name}\nDescripción: ${att.description}`
-        ).join('\n\n');
-        parts.push(tag('archivos_adjuntos', attachmentsText));
-      }
-    }
-
-    // === 4. FEW-SHOT PROMPTING (1-5 ejemplos) ===
-    if (data.useFewShot && examples.some(ex => ex.input || ex.output)) {
-      const validExamples = examples.filter(ex => ex.input && ex.output);
-      if (validExamples.length > 0) {
-        let examplesText = validExamples.map((ex, idx) => 
-          `Ejemplo ${idx + 1}:\nEntrada: ${ex.input}\nSalida Esperada: ${ex.output}`
-        ).join('\n\n');
-        parts.push(tag('ejemplos', examplesText));
-      }
-    }
-
-    // === 5. INSTRUCCIÓN PRINCIPAL (TASK) ===
-    if (data.task) {
-      let taskText = data.task;
+      case 3: // Contexto y Datos - Opcional
+        return true;
       
-      // Descomposición automática si está activada
-      if (data.useDecomposition) {
-        taskText += '\n\nESTRATEGIA: Divide esta tarea en sub-pasos lógicos y resuélvelos secuencialmente.';
-      }
+      case 4: // Instrucción y Tarea - TAREA es obligatoria
+        return data.task.trim().length >= 10;
       
-      parts.push(tag('tarea', taskText));
+      case 5: // Formato de Salida - Opcional
+        return true;
+      
+      case 6: // Refinamiento Avanzado - Opcional
+        return true;
+      
+      case 7: // Seguridad - Solo información
+        return true;
+      
+      default:
+        return true;
     }
-
-    // === 6. RESTRICCIONES Y GUARDRAILS ===
-    const constraintsList = [];
-    
-    // Restricciones del usuario
-    if (data.constraints) {
-      constraintsList.push(...data.constraints.split('\n').filter(c => c.trim()));
-    }
-    
-    // Guardrails automáticos (Negativas)
-    if (data.useNegativeInstructions) {
-      constraintsList.push('Si no tienes suficiente información para responder con certeza, indica "No tengo suficiente información para esto" en lugar de inventar datos.');
-      constraintsList.push('No inventes hechos, fechas o estadísticas. Basa tu respuesta únicamente en los datos proporcionados o en conocimiento general verificable.');
-    }
-    
-    if (constraintsList.length > 0) {
-      const constraintsText = constraintsList.map(c => `• ${c}`).join('\n');
-      parts.push(tag('restricciones', constraintsText));
-    }
-
-    // === 7. CHAIN-OF-THOUGHT (CoT) ===
-    if (data.useCoT) {
-      if (useXML && data.model === 'claude') {
-        // Claude con thinking tags
-        parts.push(tag('instruccion_razonamiento', 
-          'Antes de dar tu respuesta final, usa etiquetas <thinking> para mostrar tu proceso de razonamiento paso a paso. Luego, coloca tu respuesta final dentro de etiquetas <answer>.'
-        ));
-      } else {
-        // Zero-Shot CoT genérico
-        parts.push(tag('instruccion_razonamiento', 
-          'Pensemos paso a paso para asegurar la precisión. Muestra tu razonamiento antes de la respuesta final.'
-        ));
-      }
-    }
-
-    // === 8. FORMATO DE SALIDA (OUTPUT SHAPING) ===
-    const formatInstructions = [];
-    
-    if (data.format) {
-      const formatObj = FORMATS.find(f => f.id === data.format);
-      if (formatObj) {
-        formatInstructions.push(`Formato de salida: ${formatObj.label}`);
-        
-        // Schema si es necesario
-        if (formatObj.needsSchema && data.outputSchema) {
-          formatInstructions.push(`\nEsquema a seguir:\n${data.outputSchema}`);
-        }
-        
-        // Pre-fill hint para Claude con JSON
-        if (data.model === 'claude' && data.format === 'json' && data.usePreFill) {
-          formatInstructions.push('\n[NOTA: La respuesta debe empezar directamente con el carácter {]');
-        }
-      }
-    }
-    
-    if (data.length) {
-      formatInstructions.push(`Longitud: ${data.length}`);
-    }
-    
-    if (formatInstructions.length > 0) {
-      parts.push(tag('formato_salida', formatInstructions.join('\n')));
-    }
-
-    // === ENSAMBLAJE FINAL ===
-    let finalText = parts.join('\n\n');
-    
-    // Añadir comentario sobre el modelo objetivo
-    const modelInfo = MODELS.find(m => m.id === data.model);
-    const header = `# Prompt optimizado para: ${modelInfo?.name || 'LLM genérico'}\n# Estructura: ${useXML ? 'XML' : 'Markdown'}\n\n`;
-    
-    setFinalPrompt(header + finalText);
   };
+
+  // Obtener mensaje de error para el paso actual
+  const getStepValidationMessage = (stepIndex) => {
+    switch (stepIndex) {
+      case 2:
+        if (!data.role.trim()) return 'El rol es obligatorio para continuar';
+        if (data.role.trim().length < 3) return 'El rol debe tener al menos 3 caracteres';
+        return null;
+      
+      case 4:
+        if (!data.task.trim()) return 'La tarea es obligatoria para continuar';
+        if (data.task.trim().length < 10) return 'La tarea debe tener al menos 10 caracteres para ser específica';
+        return null;
+      
+      default:
+        return null;
+    }
+  };
+
+  // Validación del paso actual
+  const currentStepValid = isStepValid(currentStep);
+  const currentStepError = getStepValidationMessage(currentStep);
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(finalPrompt);
+    navigator.clipboard.writeText(buildPrompt);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -386,7 +562,7 @@ export default function App() {
       audienceLevel: '', 
       context: '', 
       inputData: '', 
-      constraints: '',
+      constraints: [''],
       format: '', 
       outputSchema: '',
       length: '', 
@@ -404,7 +580,7 @@ export default function App() {
     setCurrentStep(0);
   };
   
-  // Helper para añadir/quitar ejemplos
+  // Función auxiliar para añadir/quitar ejemplos
   const addExample = () => {
     if (examples.length < 5) {
       setExamples([...examples, { input: '', output: '' }]);
@@ -423,7 +599,30 @@ export default function App() {
     setExamples(newExamples);
   };
 
-  // Helper para añadir/quitar archivos adjuntos
+  // Función auxiliar para añadir/quitar restricciones
+  const addConstraint = () => {
+    setData(prev => ({
+      ...prev,
+      constraints: [...(prev.constraints || ['']), '']
+    }));
+  };
+
+  const removeConstraint = (index) => {
+    setData(prev => {
+      const next = [...(prev.constraints || [])].filter((_, i) => i !== index);
+      return { ...prev, constraints: next.length ? next : [''] };
+    });
+  };
+
+  const updateConstraint = (index, value) => {
+    setData(prev => {
+      const next = [...(prev.constraints || [])];
+      next[index] = value;
+      return { ...prev, constraints: next };
+    });
+  };
+
+  // Función auxiliar para añadir/quitar archivos adjuntos
   const addAttachment = () => {
     if (attachments.length < 10) {
       setAttachments([...attachments, { name: '', description: '' }]);
@@ -582,15 +781,36 @@ export default function App() {
       case 2: // Anclaje de Persona
         return (
           <div className="p-6 space-y-6 animate-in slide-in-from-top-2">
-            <InputGroup label="A. Rol / Profesión" helper="Define la identidad experta de la IA.">
+            <InputGroup 
+              label={<>A. Rol / Profesión <span className="text-red-500">*</span></>} 
+              helper="Define la identidad experta de la IA. Campo obligatorio (mín. 3 caracteres)."
+            >
               <div className="relative">
-                <input 
+                <textarea 
                   list="roles" 
-                  className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-slate-50"
+                  className={cn(
+                    "w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all bg-slate-50 resize-none min-h-[64px]",
+                    data.role.trim().length > 0 && data.role.trim().length < 3
+                      ? "border-amber-400 bg-amber-50/50"
+                      : data.role.trim().length >= 3
+                      ? "border-green-400 bg-green-50/30"
+                      : "border-slate-200"
+                  )}
                   placeholder="Ej. Arquitecto de Software, Consultor Legal..."
+                  rows={2}
+                  ref={roleInputRef}
                   value={data.role}
                   onChange={(e) => handleChange('role', e.target.value)}
+                  onFocus={(e) => {
+                    const end = e.target.value.length;
+                    e.target.setSelectionRange(end, end);
+                  }}
                 />
+                {data.role.trim().length >= 3 && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Check className="w-5 h-5 text-green-500" />
+                  </div>
+                )}
                 <datalist id="roles">
                   {ROLES.map(r => <option key={r} value={r} />)}
                 </datalist>
@@ -636,7 +856,7 @@ export default function App() {
       case 3: // Contexto y Datos
         return (
           <div className="p-6 space-y-6 animate-in slide-in-from-top-2">
-            <InputGroup label="A. Contextual Priming" helper="Prepara el escenario. Información de fondo y situación actual.">
+            <InputGroup label="A. Contexto Previo" helper="Prepara el escenario. Información de fondo y situación actual.">
               <textarea 
                 className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 min-h-[100px] bg-slate-50"
                 placeholder="Ej. Estamos en un entorno legacy con SQL Server 2012. El usuario tiene conocimientos básicos de programación..."
@@ -658,7 +878,7 @@ export default function App() {
               </select>
             </InputGroup>
 
-            <InputGroup label="C. Datos de Entrada (RAG Simplificado)" helper="Pega texto, código o documentos que la IA debe usar como knowledge base.">
+            <InputGroup label="C. Datos de Entrada (Base de Conocimiento)" helper="Pega texto, código o documentos que la IA debe usar como referencia.">
               <textarea 
                 className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 min-h-[120px] font-mono text-sm bg-slate-900 text-slate-100 placeholder:text-slate-500"
                 placeholder="Pega aquí logs, código fuente, documentos, transcripciones..."
@@ -730,22 +950,70 @@ export default function App() {
       case 4: // Instrucción y Tarea
         return (
           <div className="p-6 space-y-6 animate-in slide-in-from-top-2">
-            <InputGroup label="A. Tarea Principal (Imperativa)" helper="Usa verbos de acción fuertes: Genera, Clasifica, Resume, Extrae, Analiza...">
-              <textarea 
-                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 min-h-[100px] bg-slate-50"
-                placeholder="Ej. Genera un endpoint REST en Python que valide tokens JWT y retorne el perfil del usuario..."
-                value={data.task}
-                onChange={(e) => handleChange('task', e.target.value)}
-              />
+            <InputGroup 
+              label={<>A. Tarea Principal (Imperativa) <span className="text-red-500">*</span></>} 
+              helper="Usa verbos de acción fuertes: Genera, Clasifica, Resume, Extrae, Analiza... (mín. 10 caracteres)"
+            >
+              <div className="relative">
+                <textarea 
+                  className={cn(
+                    "w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 min-h-[100px] bg-slate-50",
+                    data.task.trim().length > 0 && data.task.trim().length < 10
+                      ? "border-amber-400 bg-amber-50/50"
+                      : data.task.trim().length >= 10
+                      ? "border-green-400 bg-green-50/30"
+                      : "border-slate-200"
+                  )}
+                  placeholder="Ej. Genera un endpoint REST en Python que valide tokens JWT y retorne el perfil del usuario..."
+                  value={data.task}
+                  onChange={(e) => handleChange('task', e.target.value)}
+                />
+                {data.task.trim().length > 0 && (
+                  <div className="absolute right-3 top-3 flex items-center space-x-2">
+                    <span className={cn(
+                      "text-xs font-medium",
+                      data.task.trim().length >= 10 ? "text-green-600" : "text-amber-600"
+                    )}>
+                      {data.task.trim().length}/10+
+                    </span>
+                    {data.task.trim().length >= 10 && (
+                      <Check className="w-4 h-4 text-green-500" />
+                    )}
+                  </div>
+                )}
+              </div>
             </InputGroup>
 
-            <InputGroup label="B. Restricciones y Guardrails" helper="Define límites, negativas y lo que NO debe hacer.">
-              <textarea 
-                className="w-full p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 min-h-[80px] bg-slate-50"
-                placeholder="Ej. No uses librerías deprecated&#10;No excedas 100 líneas&#10;No inventes datos&#10;Si hay ambigüedad, pide clarificación"
-                value={data.constraints}
-                onChange={(e) => handleChange('constraints', e.target.value)}
-              />
+            <InputGroup label="B. Restricciones y Límites" helper="Define límites, negativas y lo que NO debe hacer.">
+              <div className="space-y-2">
+                {(data.constraints || ['']).map((item, idx) => (
+                  <div key={idx} className="flex items-center space-x-2">
+                    <input
+                      className="flex-1 p-3 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-slate-50"
+                      placeholder="Ej. No uses librerías obsoletas"
+                      value={item}
+                      onChange={(e) => updateConstraint(idx, e.target.value)}
+                    />
+                    {(data.constraints?.length || 0) > 1 && (
+                      <button
+                        onClick={() => removeConstraint(idx)}
+                        className="px-3 py-2 rounded-lg text-sm text-red-600 hover:text-red-800"
+                        title="Eliminar"
+                      >
+                        Eliminar
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <div>
+                  <button
+                    onClick={addConstraint}
+                    className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
+                  >
+                    + Añadir restricción
+                  </button>
+                </div>
+              </div>
             </InputGroup>
           </div>
         );
@@ -788,7 +1056,7 @@ export default function App() {
               </InputGroup>
 
               {data.model === 'claude' && data.format === 'json' && (
-                <InputGroup label="D. Pre-fill (Claude)">
+                <InputGroup label="D. Pre-llenado (Claude)">
                   <Toggle 
                     label="Forzar inicio con '{'" 
                     checked={data.usePreFill} 
@@ -805,7 +1073,7 @@ export default function App() {
           <div className="p-6 space-y-6 animate-in slide-in-from-top-2">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Toggle 
-                label="Chain-of-Thought (CoT)" 
+                label="Cadena de Pensamiento (CoT)" 
                 icon={Zap}
                 checked={data.useCoT} 
                 onChange={(v) => handleChange('useCoT', v)} 
@@ -823,7 +1091,7 @@ export default function App() {
                 onChange={(v) => handleChange('useMultiAgent', v)} 
               />
               <Toggle 
-                label="Few-Shot (1-5 ejemplos)" 
+                label="Ejemplos (Few-Shot, 1-5)" 
                 icon={Copy}
                 checked={data.useFewShot} 
                 onChange={(v) => handleChange('useFewShot', v)} 
@@ -835,7 +1103,7 @@ export default function App() {
                 onChange={(v) => handleChange('useXMLTags', v)} 
               />
               <Toggle 
-                label="Guardrails Anti-Alucinación" 
+                label="Límites Anti-Alucinación" 
                 icon={Shield}
                 checked={data.useNegativeInstructions} 
                 onChange={(v) => handleChange('useNegativeInstructions', v)} 
@@ -844,14 +1112,14 @@ export default function App() {
 
             {data.useCoT && data.model === 'claude' && (
               <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm text-blue-900 animate-in fade-in">
-                <strong>Claude CoT:</strong> Se usarán etiquetas &lt;thinking&gt; y &lt;answer&gt; para separar razonamiento de respuesta final.
+                <strong>Claude (Cadena de Pensamiento):</strong> Se usarán etiquetas &lt;thinking&gt; y &lt;answer&gt; para separar razonamiento de respuesta final.
               </div>
             )}
 
             {data.useFewShot && (
               <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3 animate-in fade-in">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-semibold text-sm text-slate-700">Ejemplos de Entrenamiento (Few-Shot)</h4>
+                  <h4 className="font-semibold text-sm text-slate-700">Ejemplos de Entrenamiento</h4>
                   <button 
                     onClick={addExample}
                     disabled={examples.length >= 5}
@@ -1008,38 +1276,49 @@ export default function App() {
         </div>
 
         {/* Navegación */}
-        <div className="p-6 border-t border-slate-200 bg-white flex items-center justify-between">
-          <button
-            onClick={prevStep}
-            disabled={currentStep === 0}
-            className={cn(
-              "flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all",
-              currentStep === 0
-                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                : "bg-slate-200 text-slate-700 hover:bg-slate-300"
-            )}
-          >
-            <ChevronLeft className="w-4 h-4" />
-            <span>Anterior</span>
-          </button>
+        <div className="p-6 border-t border-slate-200 bg-white">
+          {/* Mensaje de validación */}
+          {currentStepError && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center space-x-2 text-amber-800 text-sm animate-in fade-in">
+              <Shield className="w-4 h-4 flex-shrink-0" />
+              <span>{currentStepError}</span>
+            </div>
+          )}
+          
+          <div className="flex items-center justify-between">
+            <button
+              onClick={prevStep}
+              disabled={currentStep === 0}
+              className={cn(
+                "flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all",
+                currentStep === 0
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  : "bg-slate-200 text-slate-700 hover:bg-slate-300"
+              )}
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Anterior</span>
+            </button>
 
-          <span className="text-sm text-slate-500">
-            Paso {currentStep + 1} de {STEPS.length}
-          </span>
+            <span className="text-sm text-slate-500">
+              Paso {currentStep + 1} de {STEPS.length}
+            </span>
 
-          <button
-            onClick={nextStep}
-            disabled={currentStep === STEPS.length - 1}
-            className={cn(
-              "flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all",
-              currentStep === STEPS.length - 1
-                ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                : "bg-indigo-600 text-white hover:bg-indigo-700"
-            )}
-          >
-            <span>Siguiente</span>
-            <ChevronRight className="w-4 h-4" />
-          </button>
+            <button
+              onClick={nextStep}
+              disabled={currentStep === STEPS.length - 1 || !currentStepValid}
+              className={cn(
+                "flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all",
+                currentStep === STEPS.length - 1 || !currentStepValid
+                  ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                  : "bg-indigo-600 text-white hover:bg-indigo-700"
+              )}
+              title={currentStepError || ''}
+            >
+              <span>Siguiente</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1066,8 +1345,8 @@ export default function App() {
         </div>
 
         <div className="flex-grow p-6 overflow-y-auto font-mono text-sm leading-relaxed whitespace-pre-wrap custom-scrollbar">
-          {finalPrompt ? (
-            finalPrompt
+          {buildPrompt ? (
+            buildPrompt
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-4">
               <Play className="w-12 h-12 opacity-20" />
@@ -1081,7 +1360,7 @@ export default function App() {
         {/* Info Footer */}
         <div className="p-4 border-t border-slate-800 bg-slate-900/50 text-xs text-slate-500 flex justify-between">
           <span>Optimizado para {MODELS.find(m => m.id === data.model)?.name}</span>
-          <span>{finalPrompt.length} caracteres</span>
+          <span>{buildPrompt.length} caracteres</span>
         </div>
       </div>
 
