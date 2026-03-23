@@ -10,16 +10,16 @@ export default {
     extend: {
       colors: {
         brand: {
-          bg:      '#FAFAF9',
+          bg:      '#FAF9F7',
           card:    '#FFFFFF',
-          border:  '#E7E5E4',
+          border:  '#E8E4DF',
           text:    '#1C1917',
           muted:   '#78716C',
-          primary: '#4F46E5',
-          hover:   '#4338CA',
-          accent:  '#F59E0B',
-          success: '#10B981',
-          error:   '#EF4444',
+          primary: '#292524',
+          hover:   '#1C1917',
+          accent:  '#292524',
+          success: '#57534E',
+          error:   '#78350F',
           preview: '#1C1917',
         },
       },
