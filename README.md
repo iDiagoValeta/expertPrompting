@@ -1,8 +1,37 @@
+<div align="center">
+
 # PromptArchitect
 
-Constructor profesional de prompts para IA. Genera prompts optimizados paso a paso para Claude, GPT-4o, Gemini y Llama usando las técnicas más avanzadas de ingeniería de prompts 2025–2026.
+**Constructor profesional de prompts para IA**
 
-**Demo:** [iDiagoValeta.github.io/expertPrompting](https://iDiagoValeta.github.io/expertPrompting/)
+Genera prompts optimizados paso a paso para Claude, GPT-4o, Gemini y Llama<br>usando las técnicas más avanzadas de ingeniería de prompts 2025–2026.
+
+[![Demo](https://img.shields.io/badge/Demo-Live-4F46E5?style=for-the-badge&logo=github)](https://iDiagoValeta.github.io/expertPrompting/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)](https://vitejs.dev/)
+[![Tailwind](https://img.shields.io/badge/Tailwind-3.4-38BDF8?style=flat-square&logo=tailwindcss)](https://tailwindcss.com/)
+
+</div>
+
+---
+
+## ¿Qué es PromptArchitect?
+
+Una herramienta web que guía la construcción de prompts mediante un **wizard de 8 pasos**. El prompt se genera en tiempo real en un panel lateral y se adapta automáticamente según el modelo objetivo:
+
+- **Claude** → estructura XML semántica (`<persona>`, `<tarea>`, `<restricciones>`…)
+- **GPT / Gemini / Llama** → estructura Markdown (`## SECCIÓN`, `**negrita**`)
+
+---
+
+## Características
+
+- **8 pasos guiados** — rol, contexto, tarea, formato, técnicas avanzadas y seguridad
+- **4 modelos soportados** — Claude, GPT-4o, Gemini 2.5, Llama 3
+- **10 técnicas de prompting** — CoT, Few-Shot, ReAct, Self-Consistency, ToT y más
+- **30+ plantillas profesionales** en 8 sectores: Tecnología, Salud, Legal, Negocios, Marketing, RRHH, Operaciones y Educación
+- **Preview en tiempo real** con contador de tokens estimados
+- **Sin backend** — todo ocurre en el cliente, sin almacenamiento de datos
 
 ---
 
@@ -17,112 +46,74 @@ npm run dev
 
 ---
 
-## Técnicas Implementadas
+## Técnicas de Prompting Implementadas
 
-### Técnicas Base
+### Base
 
-| Técnica | Descripción | Cuándo usarla |
-|---------|-------------|---------------|
-| **Chain-of-Thought (CoT)** | El modelo razona paso a paso antes de responder | Problemas complejos, matemáticas, análisis |
-| **Few-Shot Learning** | Provee 1–5 ejemplos de entrada/salida | Cuando el formato de salida es crítico |
-| **Role Prompting** | Asigna un rol/expertise específico a la IA | Siempre — mejora consistencia y calidad |
-| **Prompt Decomposition** | Divide la tarea en sub-pasos explícitos | Tareas multi-paso o de planificación |
-| **Multi-Agent Debate** | Simula debate interno entre perspectivas | Decisiones con múltiples puntos de vista |
-| **Anti-Alucinación (Guardrails)** | Instrucciones para admitir incertidumbre | Siempre que se requieran hechos precisos |
-| **XML/Markdown Structuring** | Delimita secciones semánticamente | Prompts complejos con múltiples partes |
+| Técnica | Cuándo usarla |
+|---------|---------------|
+| **Role Prompting** | Siempre — mejora consistencia y calidad |
+| **Chain-of-Thought (CoT)** | Problemas complejos, análisis, matemáticas |
+| **Few-Shot Learning** | Cuando el formato de salida es crítico |
+| **Prompt Decomposition** | Tareas multi-paso o de planificación |
+| **Multi-Agent Debate** | Decisiones con múltiples puntos de vista |
+| **Anti-Alucinación** | Siempre que se requieran hechos precisos |
+| **XML / Markdown Structuring** | Prompts complejos con múltiples partes |
 
-### Técnicas Avanzadas (2025–2026)
+### Avanzadas 2025–2026
 
-#### Self-Consistency
-Genera múltiples razonamientos independientes y selecciona el más consistente mediante votación mayoritaria.
+**Self-Consistency** — Genera múltiples razonamientos independientes y selecciona el más consistente por votación mayoritaria. Aumenta la precisión ~20% sobre CoT solo en tareas de razonamiento.
 
+**ReAct (Reasoning + Acting)** — Patrón iterativo que alterna pensamiento explícito con acciones concretas:
 ```
-Efectivo en: tareas de razonamiento aritmético, sentido común, inferencia simbólica.
-Combinación potente: CoT + Self-Consistency aumenta precisión ~20% sobre CoT solo.
+Pensamiento → Acción → Observación → (repite)
 ```
+Ideal para agentes con acceso a herramientas externas.
 
-#### ReAct (Reasoning + Acting)
-Patrón iterativo que alterna pensamiento explícito con acciones concretas:
-
-```
-Pensamiento: [analiza qué necesitas hacer]
-Acción:      [ejecuta un paso concreto]
-Observación: [evalúa el resultado]
-→ Repite hasta la respuesta final
-```
-
-Ideal para agentes con acceso a herramientas externas (búsqueda, código, APIs).
-
-#### Tree of Thoughts (ToT)
-Explora múltiples ramas de razonamiento en paralelo antes de converger:
-
-```
-Enfoque A → evalúa
-Enfoque B → evalúa   →  Sintetiza la mejor solución
-Enfoque C → evalúa
-```
-
-Beneficia tareas de planificación estratégica y problemas con múltiples soluciones válidas.
+**Tree of Thoughts (ToT)** — Explora 3 ramas de razonamiento en paralelo antes de sintetizar la mejor solución. Beneficia tareas de planificación estratégica.
 
 ---
 
 ## Diferencias por Modelo
 
-### Claude (Anthropic) — Estructura XML
-- Prefiere contexto amplio y etiquetas XML semánticas (`<persona>`, `<tarea>`, `<restricciones>`)
-- Excelente en: documentos largos, análisis cuidadoso, razonamiento multi-paso
-- Sigue instrucciones con precisión incluso en prompts muy largos
-- Constitutional AI: detecta y rechaza solicitudes problemáticas de forma natural
-- **Best practice:** usa `<thinking>` para CoT y pre-fill con `{` para forzar JSON
-
-### GPT-4o (OpenAI) — Estructura Markdown
-- Prefiere esquemas estrictos y Markdown con `##` y `**negrita**`
-- Excelente en: código limpio ejecutable, JSON exacto, comentarios inline
-- **Best practice:** especifica formato primero, usa word counts y schemas explícitos
-
-### Gemini 2.5 (Google) — Estructura Markdown
-- Preferible para pipelines de investigación y tareas multimodales (texto + imágenes)
-- Excelente en: summarización, digestión de información, análisis de fuentes
-- **Best practice:** especifica el scope claramente y lista las fuentes a considerar
-
-### Llama 3 (Meta) — Estructura Markdown simple
-- Modelo open-source optimizado para instrucciones directas y simples
-- Menos tolerante a prompts muy largos o complejos
-- **Best practice:** instrucciones concisas, evita anidamiento profundo de etiquetas
+| Modelo | Estructura | Fortalezas | Best Practice |
+|--------|-----------|------------|---------------|
+| **Claude** | XML semántico | Documentos largos, análisis cuidadoso, multi-paso | Usar `<thinking>` para CoT; pre-fill `{` para JSON |
+| **GPT-4o** | Markdown estricto | Código ejecutable, JSON exacto, comentarios | Especificar formato primero; word counts duros |
+| **Gemini 2.5** | Markdown + scope | Research, multimodal, summarización | Listar fuentes a considerar; scope explícito |
+| **Llama 3** | Markdown simple | Open-source, instrucciones directas | Instrucciones concisas; evitar anidamiento profundo |
 
 ---
 
-## Arquitectura del Wizard (8 Pasos)
+## Arquitectura del Wizard
 
 ```
-Paso 1: Modelo LLM      → Define la estructura del prompt (XML vs Markdown)
-Paso 2: Plantilla       → Precarga sector profesional (opcional)
-Paso 3: Persona         → Rol, nivel de experiencia, tono de voz
-Paso 4: Contexto        → Contexto previo, audiencia objetivo, datos de entrada
-Paso 5: Tarea           → Instrucción principal + restricciones
-Paso 6: Formato         → Estructura de salida, esquema, longitud
-Paso 7: Avanzado        → CoT, Few-Shot, Self-Consistency, ReAct, ToT, guardrails
-Paso 8: Seguridad       → Validación y consejos de privacidad
+① Modelo LLM   → Determina XML vs Markdown
+② Plantilla    → Precarga sector profesional (opcional)
+③ Persona      → Rol, experiencia, tono de voz
+④ Contexto     → Contexto previo, audiencia, datos de entrada
+⑤ Tarea        → Instrucción principal + restricciones
+⑥ Formato      → Estructura de salida, esquema, longitud
+⑦ Avanzado     → CoT · Few-Shot · Self-Consistency · ReAct · ToT · Guardrails
+⑧ Seguridad    → Validación y consejos de privacidad
 ```
 
-El panel derecho muestra el prompt generado **en tiempo real** mientras completas los pasos.
+El panel derecho muestra el prompt generado **en tiempo real**.
 
 ---
 
-## Sectores Profesionales
+## Sectores y Plantillas
 
-La app incluye **30+ casos de uso** organizados en 8 sectores:
-
-| Sector | Casos de Uso |
-|--------|-------------|
-| Tecnología | Generación de código, refactoring legacy, debugging, prototipado |
-| Salud | Resumen de EHR, triaje clínico, planificación de tratamiento |
-| Legal | Análisis de contratos, investigación legal, documentación de cumplimiento |
-| Negocios | Análisis de cartera, detección de fraude, respuestas a RFP |
-| Marketing | Análisis competitivo, branding, repurposing de contenido |
-| RRHH | Job descriptions, guías de entrevista, planes de onboarding |
-| Operaciones | Evaluación de proveedores, optimización de inventario |
-| Educación | Tutoría socrática, materiales educativos, RAG con citas |
+| Sector | Ejemplos de casos de uso |
+|--------|--------------------------|
+| 🚀 Tecnología | Generación de código en repo existente, refactoring legacy, debugging |
+| ⚕️ Salud | Resumen de EHR, triaje clínico, planificación de tratamiento |
+| ⚖️ Legal | Análisis de contratos, investigación legal, documentación de cumplimiento |
+| 💼 Negocios | Análisis de cartera, detección de fraude, respuestas a RFP |
+| 📢 Marketing | Análisis competitivo, branding, repurposing de contenido |
+| 👤 RRHH | Job descriptions, guías de entrevista, planes de onboarding |
+| ⚙️ Operaciones | Evaluación de proveedores, optimización de inventario |
+| 📚 Educación | Tutoría socrática, materiales educativos, RAG con citas |
 
 ---
 
@@ -130,17 +121,18 @@ La app incluye **30+ casos de uso** organizados en 8 sectores:
 
 ```
 expertPrompting/
+├── CLAUDE.md              # Guía de contexto para Claude Code
 ├── README.md
 └── prompt-flow/
     ├── src/
-    │   ├── App.jsx           # Componente principal (~500 líneas)
+    │   ├── App.jsx        # Componente principal — estado, buildPrompt, wizard, UI
     │   ├── data/
-    │   │   └── templates.js  # 8 sectores, 30+ casos de uso
-    │   ├── index.css         # Estilos globales + scrollbar personalizado
-    │   └── main.jsx          # Entry point React
-    ├── index.html            # Meta tags, fuente Inter
-    ├── tailwind.config.js    # Paleta brand + plugin animate
-    ├── vite.config.js        # Base path para GitHub Pages
+    │   │   └── templates.js   # 8 sectores, 30+ casos de uso, SAFETY_TIPS
+    │   ├── index.css      # Estilos globales, scrollbar personalizado
+    │   └── main.jsx       # Entry point React
+    ├── index.html         # Meta tags, fuente Inter
+    ├── tailwind.config.js # Paleta brand + plugin animate
+    ├── vite.config.js     # Base path /expertPrompting/ para GitHub Pages
     └── package.json
 ```
 
@@ -148,38 +140,35 @@ expertPrompting/
 
 ## Stack Tecnológico
 
-| Tecnología | Versión | Uso |
-|-----------|---------|-----|
-| React | 18 | Framework UI |
-| Vite | 5 | Build tool y dev server |
-| Tailwind CSS | 3.4 | Styling utility-first |
-| tailwindcss-animate | 1.0 | Animaciones de transición |
-| Lucide React | 0.344 | Iconos SVG |
-| clsx + tailwind-merge | — | Gestión de clases Tailwind |
-| gh-pages | 6 | Deploy a GitHub Pages |
+[![React](https://img.shields.io/badge/React_18-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite_5-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_3.4-38BDF8?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+[![Lucide](https://img.shields.io/badge/Lucide_React-f66151?style=flat-square)](https://lucide.dev/)
+[![GitHub Pages](https://img.shields.io/badge/GitHub_Pages-222222?style=flat-square&logo=github)](https://pages.github.com/)
 
 ---
 
-## Deploy en GitHub Pages
+## Deploy
 
 ```bash
 cd prompt-flow
-npm run deploy
+npm run deploy   # build + publica en rama gh-pages
 ```
 
-Esto ejecuta `npm run build` + `gh-pages -d dist`. Configura GitHub Pages así:
+Configura GitHub Pages: **Settings → Pages → Branch: `gh-pages` / Folder: `/ (root)`**
 
-1. Settings → Pages
-2. Source: **Deploy from a branch**
-3. Branch: `gh-pages` / Folder: `/ (root)`
-
-URL: `https://iDiagoValeta.github.io/expertPrompting/`
+URL pública: `https://iDiagoValeta.github.io/expertPrompting/`
 
 ---
 
-## Privacidad y Licencia
+## Privacidad
 
-- El código fuente permanece **privado** en GitHub
-- Solo el código compilado se despliega públicamente
+- Sin backend — todo ocurre en el cliente
 - No se almacenan ni transmiten datos del usuario
-- Privado — Todos los derechos reservados
+- Código fuente privado — solo el build compilado es público
+
+---
+
+<div align="center">
+<sub>Privado — Todos los derechos reservados</sub>
+</div>
