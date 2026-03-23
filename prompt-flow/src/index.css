@@ -2,7 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-gray-50 text-gray-900;
+/* ── Variables de paleta ── */
+:root {
+  --color-bg:      #FAFAF9;
+  --color-card:    #FFFFFF;
+  --color-border:  #E7E5E4;
+  --color-text:    #1C1917;
+  --color-muted:   #78716C;
+  --color-primary: #4F46E5;
+  --color-accent:  #F59E0B;
+  --color-success: #10B981;
+  --color-error:   #EF4444;
+  --color-preview: #1C1917;
 }
 
+/* ── Base ── */
+body {
+  @apply bg-stone-50 text-stone-900 font-sans antialiased;
+}
+
+/* ── Scrollbar personalizado (panel de preview) ── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #44403c;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #78716c;
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #44403c transparent;
+}
+
+/* ── Scrollbar del panel de formulario ── */
+.form-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.form-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.form-scrollbar::-webkit-scrollbar-thumb {
+  background: #e7e5e4;
+  border-radius: 3px;
+}
+.form-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e;
+}
+.form-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #e7e5e4 transparent;
+}
+
+/* ── Select arrow personalizado ── */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2378716c' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+}
